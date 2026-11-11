@@ -1,17 +1,21 @@
-import { Link } from "react-router";
+import { Link, useFetcher } from "react-router";
+import { z } from "zod";
 import type { Route } from "./+types/instructor";
 import { getCoursesByInstructor, getLessonCountForCourse } from "~/services/courseService";
 import { getEnrollmentCountForCourse } from "~/services/enrollmentService";
-import { getCurrentUserId } from "~/lib/session";
-import { getUserById } from "~/services/userService";
-import { getActiveSuggestions } from "~/services/courseSuggestionService";
+import { requireInstructor } from "~/lib/access.server";
+import {
+  dismissSuggestion,
+  getActiveSuggestions,
+} from "~/services/courseSuggestionService";
+import { parseFormData } from "~/lib/validation";
 import { Card, CardContent, CardFooter, CardHeader } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
-import { AlertTriangle, BookOpen, GraduationCap, Lightbulb, Plus, Users } from "lucide-react";
+import { AlertTriangle, BookOpen, GraduationCap, Lightbulb, Plus, Users, X } from "lucide-react";
 import { CourseImage } from "~/components/course-image";
 import { data, isRouteErrorResponse } from "react-router";
-import { CourseStatus, CourseSuggestionKind, UserRole } from "~/db/schema";
+import { CourseStatus, CourseSuggestionKind } from "~/db/schema";
 
 export function meta() {
   return [
@@ -21,21 +25,7 @@ export function meta() {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const currentUserId = await getCurrentUserId(request);
-
-  if (!currentUserId) {
-    throw data("Select a user from the DevUI panel to view your courses.", {
-      status: 401,
-    });
-  }
-
-  const user = getUserById(currentUserId);
-
-  if (!user || user.role !== UserRole.Instructor) {
-    throw data("Only instructors can access this page.", {
-      status: 403,
-    });
-  }
+  const { userId: currentUserId } = await requireInstructor(request);
 
   const instructorCourses = getCoursesByInstructor(currentUserId);
 
@@ -74,6 +64,33 @@ export async function loader({ request }: Route.LoaderArgs) {
   return { courses: coursesWithStats, suggestions };
 }
 
+const dismissSuggestionSchema = z.object({
+  intent: z.literal("dismiss-suggestion"),
+  suggestionId: z.coerce.number().int(),
+});
+
+export async function action({ request }: Route.ActionArgs) {
+  const { userId: currentUserId } = await requireInstructor(request);
+
+  const formData = await request.formData();
+  const parsed = parseFormData(formData, dismissSuggestionSchema);
+
+  if (!parsed.success) {
+    return data(
+      { error: Object.values(parsed.errors)[0] ?? "Invalid input." },
+      { status: 400 }
+    );
+  }
+
+  // Dismissing only removes the suggestion; no replacement is generated.
+  const dismissed = dismissSuggestion(parsed.data.suggestionId, currentUserId);
+  if (!dismissed) {
+    // Returned, not thrown: the card reappears instead of the page erroring.
+    return data({ error: "Suggestion not found." }, { status: 404 });
+  }
+  return { success: true };
+}
+
 function suggestionKindBadge(kind: CourseSuggestionKind) {
   return kind === CourseSuggestionKind.Series ? (
     <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
@@ -83,6 +100,47 @@ function suggestionKindBadge(kind: CourseSuggestionKind) {
     <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">
       Adjacent
     </span>
+  );
+}
+
+function SuggestionCard({
+  suggestion,
+}: {
+  suggestion: Route.ComponentProps["loaderData"]["suggestions"][number];
+}) {
+  const fetcher = useFetcher();
+
+  // Hide optimistically while dismissing; the revalidated loader then omits it.
+  if (fetcher.formData) {
+    return null;
+  }
+
+  return (
+    <Card className="flex flex-col">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="text-lg font-semibold leading-tight">
+            {suggestion.title}
+          </h3>
+          {suggestionKindBadge(suggestion.kind)}
+        </div>
+      </CardHeader>
+      <CardContent className="flex-1">
+        <p className="line-clamp-3 text-sm text-muted-foreground">
+          {suggestion.teaser}
+        </p>
+      </CardContent>
+      <CardFooter>
+        <fetcher.Form method="post">
+          <input type="hidden" name="intent" value="dismiss-suggestion" />
+          <input type="hidden" name="suggestionId" value={suggestion.id} />
+          <Button type="submit" variant="ghost" size="sm">
+            <X className="mr-1 size-4" />
+            Dismiss
+          </Button>
+        </fetcher.Form>
+      </CardFooter>
+    </Card>
   );
 }
 
@@ -254,21 +312,7 @@ export default function InstructorDashboard({
           </div>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {suggestions.map((suggestion) => (
-              <Card key={suggestion.id} className="flex flex-col">
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="text-lg font-semibold leading-tight">
-                      {suggestion.title}
-                    </h3>
-                    {suggestionKindBadge(suggestion.kind)}
-                  </div>
-                </CardHeader>
-                <CardContent className="flex-1">
-                  <p className="line-clamp-3 text-sm text-muted-foreground">
-                    {suggestion.teaser}
-                  </p>
-                </CardContent>
-              </Card>
+              <SuggestionCard key={suggestion.id} suggestion={suggestion} />
             ))}
           </div>
         </section>

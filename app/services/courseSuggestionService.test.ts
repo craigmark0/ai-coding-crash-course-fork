@@ -16,7 +16,10 @@ vi.mock("~/db", () => ({
   },
 }));
 
-import { getActiveSuggestions } from "~/services/courseSuggestionService";
+import {
+  dismissSuggestion,
+  getActiveSuggestions,
+} from "~/services/courseSuggestionService";
 
 function insertSuggestion(
   overrides: Partial<typeof schema.courseSuggestions.$inferInsert> = {}
@@ -85,5 +88,39 @@ describe("getActiveSuggestions", () => {
 
   it("returns an empty list for an instructor with no suggestions", () => {
     expect(getActiveSuggestions(base.instructor.id)).toEqual([]);
+  });
+});
+
+describe("dismissSuggestion", () => {
+  it("removes the suggestion from the instructor's active suggestions", () => {
+    const keep = insertSuggestion({ title: "Keep" });
+    const dismiss = insertSuggestion({ title: "Dismiss" });
+
+    const dismissed = dismissSuggestion(dismiss.id, base.instructor.id);
+
+    expect(dismissed).toBe(true);
+    expect(getActiveSuggestions(base.instructor.id).map((s) => s.id)).toEqual([
+      keep.id,
+    ]);
+  });
+
+  it("does not let another instructor dismiss the suggestion", () => {
+    const otherInstructor = testDb
+      .insert(schema.users)
+      .values({
+        name: "Other Instructor",
+        email: "other@example.com",
+        role: UserRole.Instructor,
+      })
+      .returning()
+      .get();
+    const suggestion = insertSuggestion({ title: "Mine" });
+
+    const dismissed = dismissSuggestion(suggestion.id, otherInstructor.id);
+
+    expect(dismissed).toBe(false);
+    expect(getActiveSuggestions(base.instructor.id).map((s) => s.id)).toEqual([
+      suggestion.id,
+    ]);
   });
 });

@@ -19,3 +19,19 @@ export function getActiveSuggestions(instructorId: number) {
     .orderBy(asc(courseSuggestions.createdAt), asc(courseSuggestions.id))
     .all();
 }
+
+// Scoped to the owning instructor: returns false (and changes nothing) when
+// the suggestion belongs to someone else or doesn't exist.
+export function dismissSuggestion(suggestionId: number, instructorId: number) {
+  const result = db
+    .update(courseSuggestions)
+    .set({ status: CourseSuggestionStatus.Dismissed })
+    .where(
+      and(
+        eq(courseSuggestions.id, suggestionId),
+        eq(courseSuggestions.instructorId, instructorId)
+      )
+    )
+    .run();
+  return result.changes > 0;
+}
