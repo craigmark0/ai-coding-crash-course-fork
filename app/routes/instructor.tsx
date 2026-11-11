@@ -4,13 +4,14 @@ import { getCoursesByInstructor, getLessonCountForCourse } from "~/services/cour
 import { getEnrollmentCountForCourse } from "~/services/enrollmentService";
 import { getCurrentUserId } from "~/lib/session";
 import { getUserById } from "~/services/userService";
+import { getActiveSuggestions } from "~/services/courseSuggestionService";
 import { Card, CardContent, CardFooter, CardHeader } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
-import { AlertTriangle, BookOpen, GraduationCap, Plus, Users } from "lucide-react";
+import { AlertTriangle, BookOpen, GraduationCap, Lightbulb, Plus, Users } from "lucide-react";
 import { CourseImage } from "~/components/course-image";
 import { data, isRouteErrorResponse } from "react-router";
-import { CourseStatus, UserRole } from "~/db/schema";
+import { CourseStatus, CourseSuggestionKind, UserRole } from "~/db/schema";
 
 export function meta() {
   return [
@@ -56,7 +57,33 @@ export async function loader({ request }: Route.LoaderArgs) {
     };
   });
 
-  return { courses: coursesWithStats };
+  // Suggestions are built from the instructor's published courses, so an
+  // instructor with none sees no suggestions section at all.
+  const hasPublishedCourse = instructorCourses.some(
+    (course) => course.status === CourseStatus.Published
+  );
+  const suggestions = hasPublishedCourse
+    ? getActiveSuggestions(currentUserId).map((suggestion) => ({
+        id: suggestion.id,
+        kind: suggestion.kind,
+        title: suggestion.title,
+        teaser: suggestion.description,
+      }))
+    : [];
+
+  return { courses: coursesWithStats, suggestions };
+}
+
+function suggestionKindBadge(kind: CourseSuggestionKind) {
+  return kind === CourseSuggestionKind.Series ? (
+    <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+      Series
+    </span>
+  ) : (
+    <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">
+      Adjacent
+    </span>
+  );
 }
 
 function statusBadge(status: string) {
@@ -121,7 +148,7 @@ export function HydrateFallback() {
 export default function InstructorDashboard({
   loaderData,
 }: Route.ComponentProps) {
-  const { courses } = loaderData;
+  const { courses, suggestions } = loaderData;
 
   return (
     <div className="mx-auto max-w-7xl p-6 lg:p-8">
@@ -217,6 +244,34 @@ export default function InstructorDashboard({
             </Card>
           ))}
         </div>
+      )}
+
+      {suggestions.length > 0 && (
+        <section className="mt-12">
+          <div className="mb-6 flex items-center gap-2">
+            <Lightbulb className="size-5 text-muted-foreground" />
+            <h2 className="text-xl font-semibold">Courses you could create next</h2>
+          </div>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {suggestions.map((suggestion) => (
+              <Card key={suggestion.id} className="flex flex-col">
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="text-lg font-semibold leading-tight">
+                      {suggestion.title}
+                    </h3>
+                    {suggestionKindBadge(suggestion.kind)}
+                  </div>
+                </CardHeader>
+                <CardContent className="flex-1">
+                  <p className="line-clamp-3 text-sm text-muted-foreground">
+                    {suggestion.teaser}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
       )}
     </div>
   );

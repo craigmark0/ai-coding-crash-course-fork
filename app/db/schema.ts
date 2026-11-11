@@ -324,3 +324,54 @@ export const videoWatchEvents = sqliteTable("video_watch_events", {
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
 });
+
+export enum CourseSuggestionKind {
+  // Continues one of the instructor's existing courses (e.g. an advanced part 2).
+  Series = "series",
+  // A related topic in the same field of expertise.
+  Adjacent = "adjacent",
+}
+
+export enum CourseSuggestionStatus {
+  Active = "active",
+  Dismissed = "dismissed",
+  Started = "started",
+}
+
+export type CourseSuggestionOutline = {
+  modules: { title: string; lessons: string[] }[];
+};
+
+export const courseSuggestions = sqliteTable(
+  "course_suggestions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    instructorId: integer("instructor_id")
+      .notNull()
+      .references(() => users.id),
+    kind: text("kind").notNull().$type<CourseSuggestionKind>(),
+    status: text("status").notNull().$type<CourseSuggestionStatus>(),
+    title: text("title").notNull(),
+    description: text("description").notNull(),
+    // Markdown.
+    salesCopy: text("sales_copy").notNull(),
+    categoryId: integer("category_id")
+      .notNull()
+      .references(() => categories.id),
+    // Ordered modules, each with ordered lesson titles.
+    outline: text("outline", { mode: "json" })
+      .notNull()
+      .$type<CourseSuggestionOutline>(),
+    // Markdown: prerequisites, outline notes, pitfalls. No links.
+    prepGuide: text("prep_guide").notNull(),
+    // Set when a draft course is saved from this suggestion.
+    courseId: integer("course_id").references(() => courses.id),
+    startedAt: text("started_at"),
+    createdAt: text("created_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (table) => [
+    index("course_suggestions_instructor_idx").on(table.instructorId),
+  ]
+);

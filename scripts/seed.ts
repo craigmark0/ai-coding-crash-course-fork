@@ -11,6 +11,8 @@ import {
   LessonProgressStatus,
   QuestionType,
   TeamMemberRole,
+  CourseSuggestionKind,
+  CourseSuggestionStatus,
 } from "../app/db/schema";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -45,6 +47,7 @@ async function seed() {
 
   // Drop and recreate tables for a clean seed
   sqlite.exec(`
+    DROP TABLE IF EXISTS course_suggestions;
     DROP TABLE IF EXISTS comments;
     DROP TABLE IF EXISTS course_ratings;
     DROP TABLE IF EXISTS video_watch_events;
@@ -1913,6 +1916,187 @@ You've completed the Building REST APIs course. You now have the skills to build
     `Created 1 team with Bossy McBossface as admin, 1 team purchase, and ${seededCoupons.length} coupons (2 redeemed, 3 available).`
   );
 
+  // ─── Course Suggestions ───
+  // Static suggestions per instructor so "My Courses" works without an API key.
+  // Each set mixes at least one series and one adjacent suggestion.
+
+  const courseSuggestionsData = db
+    .insert(schema.courseSuggestions)
+    .values([
+      {
+        instructorId: instructor1.id,
+        kind: CourseSuggestionKind.Series,
+        status: CourseSuggestionStatus.Active,
+        title: "Advanced TypeScript: Type-Level Programming",
+        description:
+          "Pick up where Introduction to TypeScript left off. Go deep on conditional types, mapped types, template literal types and inference to build APIs that are impossible to misuse.",
+        salesCopy: `## Take Your Types Further
+
+You know generics and discriminated unions. Now learn to make the type system do real work — validating inputs, deriving types from data, and catching whole classes of bugs before your code runs.
+
+### You'll Learn
+
+- Conditional types and \`infer\`
+- Mapped and template literal types
+- Designing type-safe library APIs`,
+        categoryId: catBySlug["programming"].id,
+        outline: {
+          modules: [
+            {
+              title: "Conditional Types",
+              lessons: ["Distributive Conditionals", "Inference with infer", "Recursive Conditional Types"],
+            },
+            {
+              title: "Mapped Types",
+              lessons: ["Key Remapping", "Modifiers", "Building Utility Types"],
+            },
+            {
+              title: "Template Literal Types",
+              lessons: ["String Manipulation Types", "Parsing Strings at the Type Level"],
+            },
+            {
+              title: "Designing Type-Safe APIs",
+              lessons: ["Builder Patterns", "Branded Types", "Type Testing"],
+            },
+          ],
+        },
+        prepGuide: `## Prerequisites
+
+- Generic constraints and default type parameters
+- How TypeScript widens and narrows literal types
+
+## Outline Notes
+
+- Start each module from a real-world problem before showing the type trick.
+
+## Pitfalls to Cover
+
+- Type instantiation depth limits on recursive types
+- Readability costs of overly clever types`,
+        createdAt: daysAgo(3),
+      },
+      {
+        instructorId: instructor1.id,
+        kind: CourseSuggestionKind.Adjacent,
+        status: CourseSuggestionStatus.Active,
+        title: "Type-Safe React with TypeScript",
+        description:
+          "Apply your TypeScript skills to React. Type props, hooks, context and forms properly, and build component libraries that guide their users.",
+        salesCopy: `## React, Without the Guesswork
+
+Stop sprinkling \`any\` through your components. Learn the patterns that make React and TypeScript work together.`,
+        categoryId: catBySlug["programming"].id,
+        outline: {
+          modules: [
+            { title: "Typing Components", lessons: ["Props and Children", "Generic Components"] },
+            { title: "Typing Hooks", lessons: ["useState and useReducer", "Custom Hooks", "Context"] },
+            { title: "Forms and Events", lessons: ["Event Handlers", "Form Libraries"] },
+          ],
+        },
+        prepGuide: `## Prerequisites
+
+- React's rendering model and hooks rules
+- The \`@types/react\` type definitions
+
+## Pitfalls to Cover
+
+- \`React.FC\` trade-offs
+- Over-typing event handlers`,
+        createdAt: daysAgo(3),
+      },
+      {
+        instructorId: instructor1.id,
+        kind: CourseSuggestionKind.Adjacent,
+        status: CourseSuggestionStatus.Active,
+        title: "Developer Tooling for TypeScript Projects",
+        description:
+          "Set up linting, formatting, testing and builds for TypeScript codebases that scale from a side project to a large team.",
+        salesCopy: `## Tooling That Gets Out of Your Way
+
+Configure tsconfig, ESLint, Vitest and bundlers once, properly, and stop fighting your toolchain.`,
+        categoryId: catBySlug["devops"].id,
+        outline: {
+          modules: [
+            { title: "tsconfig in Depth", lessons: ["Strictness Flags", "Module Resolution"] },
+            { title: "Linting and Formatting", lessons: ["typescript-eslint", "Prettier"] },
+            { title: "Testing", lessons: ["Vitest Setup", "Type Tests"] },
+            { title: "Builds and Monorepos", lessons: ["Bundlers", "Project References"] },
+          ],
+        },
+        prepGuide: `## Prerequisites
+
+- Current module resolution modes (bundler, node16)
+
+## Pitfalls to Cover
+
+- ESM/CommonJS interop
+- Slow type-aware lint rules`,
+        createdAt: daysAgo(3),
+      },
+      {
+        instructorId: instructor2.id,
+        kind: CourseSuggestionKind.Series,
+        status: CourseSuggestionStatus.Active,
+        title: "Scaling Node.js APIs in Production",
+        description:
+          "The follow-up to Building REST APIs with Node.js. Learn caching, queues, observability and horizontal scaling for APIs that serve millions of requests.",
+        salesCopy: `## From Working to Production-Grade
+
+Your API works. Now make it fast, observable and resilient under real traffic.`,
+        categoryId: catBySlug["programming"].id,
+        outline: {
+          modules: [
+            { title: "Performance", lessons: ["Profiling Node.js", "Caching Strategies", "Connection Pooling"] },
+            { title: "Background Work", lessons: ["Job Queues", "Retries and Idempotency"] },
+            { title: "Observability", lessons: ["Structured Logging", "Metrics", "Tracing"] },
+            { title: "Scaling Out", lessons: ["Stateless Services", "Load Balancing"] },
+          ],
+        },
+        prepGuide: `## Prerequisites
+
+- The Node.js event loop and worker threads
+- Redis basics
+
+## Pitfalls to Cover
+
+- Cache invalidation and stampedes
+- Non-idempotent job handlers`,
+        createdAt: daysAgo(2),
+      },
+      {
+        instructorId: instructor2.id,
+        kind: CourseSuggestionKind.Adjacent,
+        status: CourseSuggestionStatus.Active,
+        title: "Deploying APIs with Docker and the Cloud",
+        description:
+          "Containerise your Node.js services and deploy them with CI/CD to a cloud provider, with zero-downtime releases.",
+        salesCopy: `## Ship With Confidence
+
+Package, deploy and roll back your APIs without the 2am panic.`,
+        categoryId: catBySlug["devops"].id,
+        outline: {
+          modules: [
+            { title: "Docker for Node.js", lessons: ["Writing a Dockerfile", "Multi-Stage Builds"] },
+            { title: "CI/CD", lessons: ["Pipelines", "Automated Tests in CI"] },
+            { title: "Cloud Deployment", lessons: ["Managed Containers", "Secrets and Config", "Zero-Downtime Releases"] },
+          ],
+        },
+        prepGuide: `## Prerequisites
+
+- Docker networking and volumes
+
+## Pitfalls to Cover
+
+- Large images from dev dependencies
+- Leaking secrets into image layers`,
+        createdAt: daysAgo(2),
+      },
+    ])
+    .returning()
+    .all();
+
+  console.log(`Created ${courseSuggestionsData.length} course suggestions.`);
+
   console.log("\n✓ Seed complete!");
   console.log("  Users: 9 (1 admin, 2 instructors, 6 students)");
   console.log("  Categories: 5");
@@ -1925,6 +2109,7 @@ You've completed the Building REST APIs course. You now have the skills to build
   console.log("  Lesson comments: 15 (4 questions awaiting an answer)");
   console.log("  Purchases: 6 (5 individual + 1 team)");
   console.log("  Teams: 1 (with 5 coupons)");
+  console.log(`  Course suggestions: ${courseSuggestionsData.length}`);
 }
 
 seed().catch(console.error);
